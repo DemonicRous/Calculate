@@ -24,8 +24,8 @@ const props = defineProps({
   palletWidth: { type: Number, default: 800 },
   palletDepth: { type: Number, default: 1200 },
   palletHeight: { type: Number, default: 150 },
-  pattern: { type: String, default: 'straight' },
-  thickness: { type: Number, default: 3 }
+  thickness: { type: Number, default: 3 },
+  totalHeight: { type: Number, default: 0 }
 });
 
 const container = ref(null);
@@ -52,7 +52,7 @@ function initScene() {
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(width, height);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.sortObjects = true; // для правильного порядка прозрачных объектов
+  renderer.sortObjects = true;
   container.value.appendChild(renderer.domElement);
 
   labelRenderer = new CSS2DRenderer();
@@ -108,9 +108,8 @@ function buildPallet() {
   const bW = extWidth.value;
   const bH = extHeight.value;
   const layers = Math.max(1, props.layers);
-  const pattern = props.pattern;
+  const totalH = props.totalHeight || (pH + layers * bH);
 
-  // Масштаб для 3D
   const scale = 0.4;
   const sw = pW * scale;
   const sd = pD * scale;
@@ -119,7 +118,7 @@ function buildPallet() {
   const boxW = bW * scale;
   const boxH = bH * scale;
 
-  // ---- Поддон (простой прямоугольник) ----
+  // ---- Поддон ----
   const platformMat = new THREE.MeshStandardMaterial({
     color: 0x8B5A2B,
     roughness: 0.7,
@@ -135,7 +134,7 @@ function buildPallet() {
   wireframe.position.y = sh / 2;
   mainGroup.add(wireframe);
 
-  // ---- Метки размеров поддона ----
+  // ---- Метки поддона ----
   const labelStyle = {
     color: '#0b1a33',
     fontFamily: 'Inter, sans-serif',
@@ -171,149 +170,116 @@ function buildPallet() {
   labelHObj.position.set(sw / 2 + 15, sh / 2, -sd / 2 - 15);
   labelGroup.add(labelHObj);
 
-  // ---- Укладка коробок ----
-  // Микро-зазор для устранения мерцания (0.2% от размера)
-  const gapScale = 0.002; // очень маленький зазор
+  // ---- Метка общей высоты паллеты ----
+  const totalHeightLabelStyle = {
+    color: '#0b1a33',
+    fontFamily: 'Inter, sans-serif',
+    fontSize: '14px',
+    fontWeight: '700',
+    background: 'rgba(255,255,255,0.9)',
+    padding: '4px 12px',
+    borderRadius: '12px',
+    border: '2px solid #3b82f6',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+    pointerEvents: 'none',
+    userSelect: 'none',
+  };
+  const totalHeightLabel = document.createElement('div');
+  totalHeightLabel.textContent = `Общая высота: ${Math.round(totalH)} мм`;
+  Object.assign(totalHeightLabel.style, totalHeightLabelStyle);
+  const totalHeightLabelObj = new CSS2DObject(totalHeightLabel);
+  totalHeightLabelObj.position.set(sw / 2 + 80, totalH * scale / 2, 0);
+  labelGroup.add(totalHeightLabelObj);
+
+  // ---- Укладка коробок (столбцовая) ----
+  const gapScale = 0.01;
   const gapL = boxL * gapScale;
   const gapW = boxW * gapScale;
-  const effectiveL = boxL + gapL;
-  const effectiveW = boxW + gapW;
+  const effL = boxL + gapL;
+  const effW = boxW + gapW;
 
-  // Функция вычисления сетки для заданной ориентации (rot=0 или PI/2)
-  function calcGrid(rot) {
-    const useL = rot === 0 ? boxL : boxW;
-    const useW = rot === 0 ? boxW : boxL;
-    const effL = useL + gapL;
-    const effW = useW + gapW;
-    const countX = Math.floor(sw / effL);
-    const countZ = Math.floor(sd / effW);
-    const totalW = countX * useL + (countX - 1) * gapL;
-    const totalD = countZ * useW + (countZ - 1) * gapW;
-    const startX = -totalW / 2 + useL / 2;
-    const startZ = -totalD / 2 + useW / 2;
-    return { countX, countZ, startX, startZ, useL, useW };
-  }
+  let countX = Math.floor(sw / effL);
+  let countZ = Math.floor(sd / effW);
+  if (countX < 1) countX = 1;
+  if (countZ < 1) countZ = 1;
 
-  // Для шахматной (кирпичной) – используем смещение на полкоробки
-  function calcBrickGrid(rot, shiftX) {
-    const useL = rot === 0 ? boxL : boxW;
-    const useW = rot === 0 ? boxW : boxL;
-    const effL = useL + gapL;
-    const effW = useW + gapW;
-    // Для нечётных рядов смещаем на половину useL (или useW?)
-    const shift = shiftX ? useL / 2 : 0;
-    // Количество с учётом смещения
-    let countX = Math.floor((sw + shift) / effL);
-    let countZ = Math.floor(sd / effW);
-    if (countX < 1) countX = 1;
-    if (countZ < 1) countZ = 1;
-    const totalW = countX * useL + (countX - 1) * gapL;
-    const totalD = countZ * useW + (countZ - 1) * gapW;
-    // Смещаем старт, чтобы центрировать
-    const startX = -totalW / 2 + useL / 2;
-    const startZ = -totalD / 2 + useW / 2;
-    return { countX, countZ, startX, startZ, useL, useW, shift };
-  }
+  const totalW = countX * boxL + (countX - 1) * gapL;
+  const totalD = countZ * boxW + (countZ - 1) * gapW;
+  const startX = -totalW / 2 + boxL / 2;
+  const startZ = -totalD / 2 + boxW / 2;
 
-  // Выбираем схему
-  let gridFunc;
-  let rot = 0;
-  let useBrick = false;
-  let shiftX = false;
+  // ---- Статистика: общее количество коробок ----
+  const totalBoxes = countX * countZ * layers;
+  const statsLabelStyle = {
+    color: '#0b1a33',
+    fontFamily: 'Inter, sans-serif',
+    fontSize: '14px',
+    fontWeight: '700',
+    background: 'rgba(255,255,255,0.9)',
+    padding: '4px 12px',
+    borderRadius: '12px',
+    border: '2px solid #10b981',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+    pointerEvents: 'none',
+    userSelect: 'none',
+  };
+  const statsLabel = document.createElement('div');
+  statsLabel.textContent = `Коробок на паллете: ${totalBoxes}`;
+  Object.assign(statsLabel.style, statsLabelStyle);
+  const statsLabelObj = new CSS2DObject(statsLabel);
+  statsLabelObj.position.set(0, totalH * scale + 50, 0);
+  labelGroup.add(statsLabelObj);
 
-  if (pattern === 'straight') {
-    gridFunc = () => calcGrid(0);
-  } else if (pattern === 'rotated') {
-    // Пробуем оба варианта и выбираем лучший по количеству
-    const g1 = calcGrid(0);
-    const g2 = calcGrid(Math.PI / 2);
-    if (g1.countX * g1.countZ >= g2.countX * g2.countZ) {
-      rot = 0;
-      gridFunc = () => g1;
-    } else {
-      rot = Math.PI / 2;
-      gridFunc = () => g2;
-    }
-  } else if (pattern === 'cross') {
-    // Шахматная (кирпичная) – каждый слой смещён на полкоробки
-    useBrick = true;
-    // Для первого слоя – прямая
-    const g1 = calcGrid(0);
-    // Для второго слоя – смещение по X
-    const g2 = calcBrickGrid(0, true);
-    // Выбираем вариант с большим количеством, но используем brick для всех слоёв
-    if (g1.countX * g1.countZ >= g2.countX * g2.countZ) {
-      rot = 0;
-      shiftX = false;
-      gridFunc = () => calcGrid(0);
-    } else {
-      rot = 0;
-      shiftX = true;
-      gridFunc = () => calcBrickGrid(0, true);
-    }
-  }
-
-  // Если pattern не распознан – прямая
-  if (!gridFunc) {
-    gridFunc = () => calcGrid(0);
-  }
-
-  // Материалы с polygonOffset для устранения мерцания
-  const boxMat = new THREE.MeshPhongMaterial({
-    color: 0x3b82f6,
+  // ---- Материалы для граней коробки ----
+  const colors = [
+    0xff6666, // +x (длина)
+    0xff6666, // -x
+    0x66ff66, // +y (высота)
+    0x66ff66, // -y
+    0x6666ff, // +z (ширина)
+    0x6666ff  // -z
+  ];
+  const materials = colors.map(c => new THREE.MeshPhongMaterial({
+    color: c,
     transparent: true,
-    opacity: 0.20,
+    opacity: 0.2,
     side: THREE.DoubleSide,
-    depthWrite: true,
+    depthWrite: false,
     depthTest: true,
-    polygonOffset: true,
-    polygonOffsetFactor: -1,
-    polygonOffsetUnits: -1,
+  }));
+
+  const edgeMat = new THREE.LineBasicMaterial({
+    color: 0x1e293b,
+    depthTest: true,
   });
-  const edgeMat = new THREE.LineBasicMaterial({ color: 0x1e293b });
 
-  // Генерируем слои
+  // ---- Создание слоёв с увеличенным отступом от поддона ----
+  const yOffset = 2; // увеличенный отступ для устранения мерцания (в масштабе)
+
   for (let layer = 0; layer < layers; layer++) {
-    const yPos = sh + boxH / 2 + layer * boxH;
-    let currentRot = rot;
-    let currentGrid;
-
-    if (useBrick && layer % 2 === 1) {
-      // Нечётный слой – применяем смещение
-      if (shiftX) {
-        const g = calcBrickGrid(currentRot, true);
-        currentGrid = g;
-      } else {
-        // Можно также смещение по Z
-        const g = calcBrickGrid(currentRot, false);
-        currentGrid = g;
-      }
-    } else {
-      currentGrid = gridFunc();
-    }
-
-    const { countX, countZ, startX, startZ, useL, useW } = currentGrid;
+    const yPos = sh + boxH / 2 + layer * boxH + yOffset;
 
     for (let i = 0; i < countX; i++) {
       for (let j = 0; j < countZ; j++) {
-        const x = startX + i * (useL + gapL);
-        const z = startZ + j * (useW + gapW);
-        const box = new THREE.Mesh(new THREE.BoxGeometry(useL, boxH, useW), boxMat);
+        const x = startX + i * (boxL + gapL);
+        const z = startZ + j * (boxW + gapW);
+
+        const geometry = new THREE.BoxGeometry(boxL, boxH, boxW);
+        const box = new THREE.Mesh(geometry, materials);
         box.position.set(x, yPos, z);
-        if (currentRot !== 0) box.rotation.y = currentRot;
+        box.renderOrder = 0;
         mainGroup.add(box);
-        const edgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(useL, boxH, useW));
+
+        const edgeGeo = new THREE.EdgesGeometry(geometry);
         const edge = new THREE.LineSegments(edgeGeo, edgeMat);
         edge.position.set(x, yPos, z);
-        if (currentRot !== 0) edge.rotation.y = currentRot;
-        // Небольшой сдвиг для рёбер по Y, чтобы избежать z-fighting
-        edge.position.y += 0.01;
+        edge.renderOrder = 1;
         mainGroup.add(edge);
       }
     }
   }
 
-  // Центрируем и настраиваем камеру
+  // Центрирование сцены
   const box = new THREE.Box3().setFromObject(mainGroup);
   const center = new THREE.Vector3();
   box.getCenter(center);
@@ -355,7 +321,7 @@ watch(autoRotate, (val) => { controls.autoRotate = val; });
 watch(
   () => [props.boxLength, props.boxWidth, props.boxHeight, props.layers,
           props.palletWidth, props.palletDepth, props.palletHeight,
-          props.pattern, props.thickness],
+          props.thickness, props.totalHeight],
   () => { if (scene) buildPallet(); },
   { deep: true }
 );

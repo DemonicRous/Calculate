@@ -296,19 +296,6 @@
               </select>
             </div>
             <div class="input-group">
-              <label>Схема укладки</label>
-              <div class="pattern-buttons">
-                <button
-                  v-for="(label, key) in patternOptions"
-                  :key="key"
-                  :class="['pattern-btn', { active: state.stackingPattern === key }]"
-                  @click="state.stackingPattern = key"
-                >
-                  {{ label }}
-                </button>
-              </div>
-            </div>
-            <div class="input-group">
               <label>Количество ярусов</label>
               <input type="number" v-model.number="state.stackHeight" min="1" step="1" />
             </div>
@@ -321,6 +308,7 @@
 
           <div class="card viewer-card">
             <h2><CubeIcon class="icon" /> 3D-визуализация паллетизации</h2>
+            <!-- Вкладка 4: Паллетизация -->
             <PalletizationViewer
               :boxLength="state.length"
               :boxWidth="state.width"
@@ -329,8 +317,8 @@
               :palletWidth="palletWidth"
               :palletDepth="palletDepth"
               :palletHeight="150"
-              :pattern="state.stackingPattern"
               :thickness="profileThickness"
+              :totalHeight="totalPalletHeight"
             />
             <p class="hint">🖱 Вращайте мышью, меняйте параметры – модель обновится</p>
           </div>
@@ -371,13 +359,6 @@ const { state, formFactor, bct_kg, stackLoad, safetyMargin,
         palletWidth, palletDepth, palletHeight,
         profileThickness, extLength, extWidth, extHeight, totalPalletHeight,
         reset } = useBoxStrength();
-
-// Опции для переключателей схем укладки
-const patternOptions = {
-  straight: 'Прямая',
-  rotated: 'Повёрнутая',
-  cross: 'Шахматная'
-};
 
 const tabs = [
   { key: 'calculator', label: 'Калькулятор', icon: CalculatorIcon },
@@ -532,32 +513,6 @@ h3 {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
-}
-
-/* ---- Переключатели схем укладки (кнопки) ---- */
-.pattern-buttons {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.pattern-btn {
-  padding: 6px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 20px;
-  background: white;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: #475569;
-  transition: 0.15s;
-}
-.pattern-btn.active {
-  background: #3b82f6;
-  color: white;
-  border-color: #3b82f6;
-}
-.pattern-btn:hover:not(.active) {
-  background: #f1f5f9;
 }
 
 /* ---- Результаты ---- */
