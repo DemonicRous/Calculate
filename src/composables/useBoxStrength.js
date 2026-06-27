@@ -184,11 +184,213 @@ const extLength = computed(() => state.length + 2 * profileThickness.value);
 const extWidth = computed(() => state.width + 2 * profileThickness.value);
 const extHeight = computed(() => state.height + 2 * profileThickness.value);
 
+// Вспомогательная функция для генерации раскладок
+function getLayouts(pW, pD, bL, bW) {
+  if (bL <= 0 || bW <= 0) return {};
+
+  const layouts = {};
+
+  // 1. Сетка (straight)
+  const colsStraight = Math.floor(pW / bL);
+  const rowsStraight = Math.floor(pD / bW);
+  if (colsStraight > 0 && rowsStraight > 0) {
+    const boxes = [];
+    const usedW = colsStraight * bL;
+    const usedD = rowsStraight * bW;
+    const offsetX = (pW - usedW) / 2;
+    const offsetZ = (pD - usedD) / 2;
+
+    for (let i = 0; i < colsStraight; i++) {
+      for (let j = 0; j < rowsStraight; j++) {
+        boxes.push({
+          x: -pW / 2 + offsetX + i * bL + bL / 2,
+          z: -pD / 2 + offsetZ + j * bW + bW / 2,
+          w: bL,
+          d: bW,
+          rotated: false
+        });
+      }
+    }
+    layouts.straight = {
+      name: 'Сетка',
+      count: boxes.length,
+      boxes
+    };
+  } else {
+    layouts.straight = { name: 'Сетка', count: 0, boxes: [] };
+  }
+
+  // 2. Поворот (rotated)
+  const colsRotated = Math.floor(pW / bW);
+  const rowsRotated = Math.floor(pD / bL);
+  if (colsRotated > 0 && rowsRotated > 0) {
+    const boxes = [];
+    const usedW = colsRotated * bW;
+    const usedD = rowsRotated * bL;
+    const offsetX = (pW - usedW) / 2;
+    const offsetZ = (pD - usedD) / 2;
+
+    for (let i = 0; i < colsRotated; i++) {
+      for (let j = 0; j < rowsRotated; j++) {
+        boxes.push({
+          x: -pW / 2 + offsetX + i * bW + bW / 2,
+          z: -pD / 2 + offsetZ + j * bL + bL / 2,
+          w: bW,
+          d: bL,
+          rotated: true
+        });
+      }
+    }
+    layouts.rotated = {
+      name: 'Поворот',
+      count: boxes.length,
+      boxes
+    };
+  } else {
+    layouts.rotated = { name: 'Поворот', count: 0, boxes: [] };
+  }
+
+  // 3. Перевязка (interlocking)
+  // Ищем лучший сплит по ширине или глубине
+  let bestInterlocking = { count: 0, boxes: [] };
+
+  // Сплит по ширине
+  const maxColsL = Math.floor(pW / bL);
+  for (let c1 = 0; c1 <= maxColsL; c1++) {
+    const w1 = c1 * bL;
+    const w2 = pW - w1;
+    const c2 = Math.floor(w2 / bW);
+
+    const r1 = Math.floor(pD / bW);
+    const r2 = Math.floor(pD / bL);
+
+    const count = c1 * r1 + c2 * r2;
+    if (count > bestInterlocking.count && c1 > 0 && c2 > 0) {
+      const boxes = [];
+      const totalUsedW = w1 + c2 * bW;
+      const offsetX = (pW - totalUsedW) / 2;
+
+      // Блок 1 (продольные)
+      const offsetZ1 = (pD - r1 * bW) / 2;
+      for (let i = 0; i < c1; i++) {
+        for (let j = 0; j < r1; j++) {
+          boxes.push({
+            x: -pW / 2 + offsetX + i * bL + bL / 2,
+            z: -pD / 2 + offsetZ1 + j * bW + bW / 2,
+            w: bL,
+            d: bW,
+            rotated: false
+          });
+        }
+      }
+      // Блок 2 (поперечные)
+      const offsetZ2 = (pD - r2 * bL) / 2;
+      for (let i = 0; i < c2; i++) {
+        for (let j = 0; j < r2; j++) {
+          boxes.push({
+            x: -pW / 2 + offsetX + w1 + i * bW + bW / 2,
+            z: -pD / 2 + offsetZ2 + j * bL + bL / 2,
+            w: bW,
+            d: bL,
+            rotated: true
+          });
+        }
+      }
+      bestInterlocking = { count, boxes };
+    }
+  }
+
+  // Сплит по глубине
+  const maxRowsW = Math.floor(pD / bW);
+  for (let r1 = 0; r1 <= maxRowsW; r1++) {
+    const d1 = r1 * bW;
+    const d2 = pD - d1;
+    const r2 = Math.floor(d2 / bL);
+
+    const c1 = Math.floor(pW / bL);
+    const c2 = Math.floor(pW / bW);
+
+    const count = c1 * r1 + c2 * r2;
+    if (count > bestInterlocking.count && r1 > 0 && r2 > 0) {
+      const boxes = [];
+      const totalUsedD = d1 + r2 * bL;
+      const offsetZ = (pD - totalUsedD) / 2;
+
+      // Блок 1 (продольные)
+      const offsetX1 = (pW - c1 * bL) / 2;
+      for (let i = 0; i < c1; i++) {
+        for (let j = 0; j < r1; j++) {
+          boxes.push({
+            x: -pW / 2 + offsetX1 + i * bL + bL / 2,
+            z: -pD / 2 + offsetZ + j * bW + bW / 2,
+            w: bL,
+            d: bW,
+            rotated: false
+          });
+        }
+      }
+      // Блок 2 (поперечные)
+      const offsetX2 = (pW - c2 * bW) / 2;
+      for (let i = 0; i < c2; i++) {
+        for (let j = 0; j < r2; j++) {
+          boxes.push({
+            x: -pW / 2 + offsetX2 + i * bW + bW / 2,
+            z: -pD / 2 + offsetZ + d1 + j * bL + bL / 2,
+            w: bW,
+            d: bL,
+            rotated: true
+          });
+        }
+      }
+      bestInterlocking = { count, boxes };
+    }
+  }
+
+  layouts.interlocking = {
+    name: 'Перевязка',
+    count: bestInterlocking.count,
+    boxes: bestInterlocking.boxes
+  };
+
+  return layouts;
+}
+
+// Все рассчитанные раскладки
+const availableLayouts = computed(() => {
+  return getLayouts(palletWidth.value, palletDepth.value, extLength.value, extWidth.value);
+});
+
+// Активная раскладка
+const currentLayout = computed(() => {
+  const pattern = state.stackingPattern || 'straight';
+  return availableLayouts.value[pattern] || availableLayouts.value.straight || { count: 0, boxes: [] };
+});
+
+// Эффективность использования площади (%)
+const efficiencyArea = computed(() => {
+  const pW = palletWidth.value;
+  const pD = palletDepth.value;
+  if (pW <= 0 || pD <= 0) return 0;
+  const palletArea = pW * pD;
+  const boxArea = extLength.value * extWidth.value;
+  const totalBoxArea = currentLayout.value.count * boxArea;
+  return (totalBoxArea / palletArea) * 100;
+});
+
 // Общая высота паллеты (поддон + все ярусы)
 const totalPalletHeight = computed(() => {
   const palletH = 150;
   const layers = Math.max(1, state.stackHeight);
   return palletH + layers * extHeight.value;
+});
+
+// Общий вес паллеты (кг)
+const totalPalletWeight = computed(() => {
+  const layers = Math.max(1, state.stackHeight);
+  const countPerLayer = currentLayout.value.count;
+  const cargoWeight = countPerLayer * layers * state.weight;
+  const palletEmptyWeight = 15; // Вес поддона 15 кг
+  return cargoWeight + palletEmptyWeight;
 });
 
 function reset() {
@@ -235,6 +437,10 @@ export function useBoxStrength() {
     extWidth,
     extHeight,
     totalPalletHeight,
+    availableLayouts,
+    currentLayout,
+    efficiencyArea,
+    totalPalletWeight,
     reset
   };
 }

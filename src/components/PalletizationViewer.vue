@@ -17,8 +17,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
 const props = defineProps({
-  boxLength: { type: Number, default: 400 },
-  boxWidth: { type: Number, default: 300 },
+  layoutBoxes: { type: Array, default: () => [] },
   boxHeight: { type: Number, default: 200 },
   layers: { type: Number, default: 1 },
   palletWidth: { type: Number, default: 800 },
@@ -35,9 +34,7 @@ let labelGroup = new THREE.Group();
 let autoRotate = ref(true);
 let animationFrameId;
 
-// Внешние размеры коробки
-const extLength = computed(() => props.boxLength + 2 * props.thickness);
-const extWidth = computed(() => props.boxWidth + 2 * props.thickness);
+// Внешние размеры коробки по высоте (для отрисовки)
 const extHeight = computed(() => props.boxHeight + 2 * props.thickness);
 
 function initScene() {
@@ -133,8 +130,6 @@ function buildPallet() {
   const pW = props.palletWidth;
   const pD = props.palletDepth;
   const pH = props.palletHeight;
-  const bL = extLength.value;
-  const bW = extWidth.value;
   const bH = extHeight.value;
   const layers = Math.max(1, props.layers);
   const totalH = props.totalHeight || (pH + layers * bH);
@@ -143,8 +138,6 @@ function buildPallet() {
   const sw = pW * scale;
   const sd = pD * scale;
   const sh = pH * scale;
-  const boxL = bL * scale;
-  const boxW = bW * scale;
   const boxH = bH * scale;
 
   // ---- Поддон ----
@@ -222,25 +215,8 @@ function buildPallet() {
   totalHeightLabelObj.position.set(sw / 2 + 80, totalH * scale / 2, 0);
   labelGroup.add(totalHeightLabelObj);
 
-  // ---- Укладка коробок (столбцовая) ----
-  const gapScale = 0.01;
-  const gapL = boxL * gapScale;
-  const gapW = boxW * gapScale;
-  const effL = boxL + gapL;
-  const effW = boxW + gapW;
-
-  let countX = Math.floor(sw / effL);
-  let countZ = Math.floor(sd / effW);
-  if (countX < 1) countX = 1;
-  if (countZ < 1) countZ = 1;
-
-  const totalW = countX * boxL + (countX - 1) * gapL;
-  const totalD = countZ * boxW + (countZ - 1) * gapW;
-  const startX = -totalW / 2 + boxL / 2;
-  const startZ = -totalD / 2 + boxW / 2;
-
   // ---- Статистика: общее количество коробок ----
-  const totalBoxes = countX * countZ * layers;
+  const totalBoxes = props.layoutBoxes.length * layers;
   const statsLabelStyle = {
     color: '#ffffff',
     fontFamily: 'Inter, sans-serif',
@@ -273,33 +249,36 @@ function buildPallet() {
     depthTest: true,
   });
 
-  // ---- Создание слоёв ----
-  const boxGeo = new THREE.BoxGeometry(boxL, boxH, boxW);
-  const edgeGeo = new THREE.EdgesGeometry(boxGeo);
-  
+  // ---- Создание слоёв с перевязкой (зеркалирование четных ярусов) ----
   const yOffset = 1;
 
-  // Используем InstancedMesh для оптимизации (особенно если коробок много)
-  // Но для простоты оставим Mesh, так как слоев обычно немного
   for (let layer = 0; layer < layers; layer++) {
     const yPos = sh + boxH / 2 + layer * boxH + yOffset;
 
-    for (let i = 0; i < countX; i++) {
-      for (let j = 0; j < countZ; j++) {
-        const x = startX + i * (boxL + gapL);
-        const z = startZ + j * (boxW + gapW);
+    // В логистике слои перевязывают путем зеркального поворота на 180° по центру
+    const shouldMirror = layer % 2 === 1;
 
-        const box = new THREE.Mesh(boxGeo, boxMat);
-        box.position.set(x, yPos, z);
-        box.castShadow = true;
-        box.receiveShadow = true;
-        mainGroup.add(box);
+    props.layoutBoxes.forEach((boxDef) => {
+      // Масштабируем размеры коробки и её координаты
+      const boxL = boxDef.w * scale;
+      const boxW = boxDef.d * scale;
 
-        const edge = new THREE.LineSegments(edgeGeo, edgeMat);
-        edge.position.set(x, yPos, z);
-        mainGroup.add(edge);
-      }
-    }
+      // Зеркалируем координаты для четных ярусов (поворот на 180 относительно центра)
+      const x = shouldMirror ? -boxDef.x * scale : boxDef.x * scale;
+      const z = shouldMirror ? -boxDef.z * scale : boxDef.z * scale;
+
+      const boxGeo = new THREE.BoxGeometry(boxL, boxH, boxW);
+      const box = new THREE.Mesh(boxGeo, boxMat);
+      box.position.set(x, yPos, z);
+      box.castShadow = true;
+      box.receiveShadow = true;
+      mainGroup.add(box);
+
+      const edgeGeo = new THREE.EdgesGeometry(boxGeo);
+      const edge = new THREE.LineSegments(edgeGeo, edgeMat);
+      edge.position.set(x, yPos, z);
+      mainGroup.add(edge);
+    });
   }
 
   // Центрирование сцены
@@ -342,7 +321,7 @@ function resetCamera() {
 watch(autoRotate, (val) => { controls.autoRotate = val; });
 
 watch(
-  () => [props.boxLength, props.boxWidth, props.boxHeight, props.layers,
+  () => [props.layoutBoxes, props.boxHeight, props.layers,
           props.palletWidth, props.palletDepth, props.palletHeight,
           props.thickness, props.totalHeight],
   () => { if (scene) buildPallet(); },
