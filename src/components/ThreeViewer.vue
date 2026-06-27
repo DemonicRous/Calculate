@@ -15,9 +15,10 @@ const props = defineProps({
 });
 
 const container = ref(null);
-let scene, camera, renderer, labelRenderer, controls;
+let scene, camera, renderer, labelRenderer, controls, resizeObserver;
 let boxGroup = new THREE.Group();
 let labelGroup = new THREE.Group();
+let animationFrameId;
 
 function initScene() {
   const rect = container.value.getBoundingClientRect();
@@ -33,6 +34,11 @@ function initScene() {
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(width, height);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  
+  // Включаем тени
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  
   container.value.appendChild(renderer.domElement);
 
   labelRenderer = new CSS2DRenderer();
@@ -52,23 +58,47 @@ function initScene() {
   controls.maxDistance = 2000;
   controls.minDistance = 100;
 
-  const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+  // Освещение для реалистичности
+  const ambient = new THREE.AmbientLight(0xffffff, 0.5);
   scene.add(ambient);
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-  dirLight.position.set(200, 400, 300);
+  
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+  dirLight.position.set(300, 500, 400);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.width = 2048;
+  dirLight.shadow.mapSize.height = 2048;
+  dirLight.shadow.camera.near = 0.5;
+  dirLight.shadow.camera.far = 1500;
+  dirLight.shadow.camera.left = -500;
+  dirLight.shadow.camera.right = 500;
+  dirLight.shadow.camera.top = 500;
+  dirLight.shadow.camera.bottom = -500;
+  dirLight.shadow.bias = -0.001;
   scene.add(dirLight);
-  const backLight = new THREE.DirectionalLight(0xffffff, 0.3);
-  backLight.position.set(-200, 100, -300);
+  
+  const backLight = new THREE.DirectionalLight(0xffffff, 0.4);
+  backLight.position.set(-300, 200, -300);
   scene.add(backLight);
+
+  // Невидимая плоскость для приема теней
+  const planeGeometry = new THREE.PlaneGeometry(3000, 3000);
+  const planeMaterial = new THREE.ShadowMaterial({ opacity: 0.15 });
+  const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+  plane.rotation.x = -Math.PI / 2;
+  plane.position.y = - (props.height * 0.5 * 0.5) - 2; // Чуть ниже коробки
+  plane.receiveShadow = true;
+  scene.add(plane);
 
   boxGroup = new THREE.Group();
   labelGroup = new THREE.Group();
   scene.add(boxGroup);
   scene.add(labelGroup);
 
-  const resizeObserver = new ResizeObserver(() => {
+  resizeObserver = new ResizeObserver(() => {
+    if (!container.value) return;
     const rect = container.value.getBoundingClientRect();
     const w = rect.width, h = rect.height;
+    if (w === 0 || h === 0) return;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
@@ -87,31 +117,35 @@ function createBox(length, width, height) {
   const h = height * scale;
 
   const geometry = new THREE.BoxGeometry(l, h, w);
-  const material = new THREE.MeshPhongMaterial({
-    color: 0x3b82f6,
-    transparent: true,
-    opacity: 0.12,
+  
+  // Реалистичный материал картона
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xc4a482, // Цвет крафт-картона
+    roughness: 0.85,
+    metalness: 0.05,
     side: THREE.DoubleSide,
-    depthWrite: true,
   });
+  
   const cube = new THREE.Mesh(geometry, material);
+  cube.castShadow = true;
+  cube.receiveShadow = true;
   boxGroup.add(cube);
 
   const edges = new THREE.EdgesGeometry(geometry);
-  const lineMat = new THREE.LineBasicMaterial({ color: 0x1e293b });
+  const lineMat = new THREE.LineBasicMaterial({ color: 0x8b6c4b, linewidth: 2 });
   const wireframe = new THREE.LineSegments(edges, lineMat);
   boxGroup.add(wireframe);
 
   const labelStyle = {
-    color: '#0b1a33',
+    color: '#1e293b',
     fontFamily: 'Inter, system-ui, sans-serif',
-    fontSize: '14px',
-    fontWeight: '600',
-    background: 'rgba(255,255,255,0.85)',
-    padding: '2px 8px',
-    borderRadius: '12px',
-    border: '1px solid #cbd5e1',
-    boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+    fontSize: '13px',
+    fontWeight: '700',
+    background: 'rgba(255,255,255,0.9)',
+    padding: '4px 10px',
+    borderRadius: '8px',
+    border: '1px solid rgba(0,0,0,0.1)',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
     pointerEvents: 'none',
     userSelect: 'none',
   };
@@ -120,21 +154,21 @@ function createBox(length, width, height) {
   labelL.textContent = `${length} мм`;
   Object.assign(labelL.style, labelStyle);
   const labelLObj = new CSS2DObject(labelL);
-  labelLObj.position.set(0, -h/2 - 15, w/2 + 10);
+  labelLObj.position.set(0, -h/2 - 20, w/2 + 20);
   labelGroup.add(labelLObj);
 
   const labelW = document.createElement('div');
   labelW.textContent = `${width} мм`;
   Object.assign(labelW.style, labelStyle);
   const labelWObj = new CSS2DObject(labelW);
-  labelWObj.position.set(l/2 + 10, -h/2 - 15, 0);
+  labelWObj.position.set(l/2 + 20, -h/2 - 20, 0);
   labelGroup.add(labelWObj);
 
   const labelH = document.createElement('div');
   labelH.textContent = `${height} мм`;
   Object.assign(labelH.style, labelStyle);
   const labelHObj = new CSS2DObject(labelH);
-  labelHObj.position.set(l/2 + 10, 0, -w/2 - 10);
+  labelHObj.position.set(l/2 + 20, 0, -w/2 - 20);
   labelGroup.add(labelHObj);
 
   boxGroup.position.y = 0;
@@ -142,10 +176,10 @@ function createBox(length, width, height) {
 }
 
 function animate() {
-  requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
-  labelRenderer.render(scene, camera);
+  animationFrameId = requestAnimationFrame(animate);
+  if (controls) controls.update();
+  if (renderer && scene && camera) renderer.render(scene, camera);
+  if (labelRenderer && scene && camera) labelRenderer.render(scene, camera);
 }
 
 watch(() => [props.length, props.width, props.height], () => {
@@ -160,8 +194,10 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  cancelAnimationFrame(animationFrameId);
+  if (resizeObserver) resizeObserver.disconnect();
   if (renderer) renderer.dispose();
-  if (labelRenderer) labelRenderer.domElement.remove();
+  if (labelRenderer && labelRenderer.domElement) labelRenderer.domElement.remove();
   if (container.value) container.value.innerHTML = '';
 });
 </script>

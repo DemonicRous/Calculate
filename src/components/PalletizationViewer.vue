@@ -2,8 +2,8 @@
   <div class="pallet-viewer-wrapper">
     <div ref="container" class="pallet-container"></div>
     <div class="controls">
-      <button @click="resetCamera" class="ctrl-btn">Сбросить вид</button>
-      <label>
+      <button @click="resetCamera" class="ctrl-btn glass-btn">Сбросить вид</button>
+      <label class="checkbox-label">
         <input type="checkbox" v-model="autoRotate" /> Автовращение
       </label>
     </div>
@@ -29,10 +29,11 @@ const props = defineProps({
 });
 
 const container = ref(null);
-let scene, camera, renderer, labelRenderer, controls;
+let scene, camera, renderer, labelRenderer, controls, resizeObserver;
 let mainGroup = new THREE.Group();
 let labelGroup = new THREE.Group();
 let autoRotate = ref(true);
+let animationFrameId;
 
 // Внешние размеры коробки
 const extLength = computed(() => props.boxLength + 2 * props.thickness);
@@ -47,12 +48,16 @@ function initScene() {
   scene = new THREE.Scene();
   scene.background = null;
 
-  camera = new THREE.PerspectiveCamera(35, width / height, 0.1, 5000);
+  camera = new THREE.PerspectiveCamera(35, width / height, 0.1, 8000);
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(width, height);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.sortObjects = true;
+  
+  // Включаем тени
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
   container.value.appendChild(renderer.domElement);
 
   labelRenderer = new CSS2DRenderer();
@@ -67,28 +72,52 @@ function initScene() {
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.autoRotate = true;
-  controls.autoRotateSpeed = 1.0;
+  controls.autoRotateSpeed = 0.8;
   controls.target.set(0, 0, 0);
-  controls.maxDistance = 3000;
+  controls.maxDistance = 4000;
   controls.minDistance = 200;
 
+  // Освещение
   const ambient = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambient);
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
-  dirLight.position.set(300, 500, 400);
+  
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+  dirLight.position.set(400, 800, 500);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.width = 2048;
+  dirLight.shadow.mapSize.height = 2048;
+  dirLight.shadow.camera.near = 10;
+  dirLight.shadow.camera.far = 3000;
+  dirLight.shadow.camera.left = -800;
+  dirLight.shadow.camera.right = 800;
+  dirLight.shadow.camera.top = 800;
+  dirLight.shadow.camera.bottom = -800;
+  dirLight.shadow.bias = -0.001;
   scene.add(dirLight);
-  const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
-  fillLight.position.set(-300, 200, -400);
+
+  const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
+  fillLight.position.set(-400, 300, -500);
   scene.add(fillLight);
+
+  // Невидимая плоскость для приема теней
+  const planeGeometry = new THREE.PlaneGeometry(5000, 5000);
+  const planeMaterial = new THREE.ShadowMaterial({ opacity: 0.15 });
+  const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+  plane.rotation.x = -Math.PI / 2;
+  plane.position.y = -2; // Чуть ниже поддона
+  plane.receiveShadow = true;
+  scene.add(plane);
 
   mainGroup = new THREE.Group();
   labelGroup = new THREE.Group();
   scene.add(mainGroup);
   scene.add(labelGroup);
 
-  const resizeObserver = new ResizeObserver(() => {
+  resizeObserver = new ResizeObserver(() => {
+    if (!container.value) return;
     const rect = container.value.getBoundingClientRect();
     const w = rect.width, h = rect.height;
+    if (w === 0 || h === 0) return;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
@@ -121,11 +150,13 @@ function buildPallet() {
   // ---- Поддон ----
   const platformMat = new THREE.MeshStandardMaterial({
     color: 0x8B5A2B,
-    roughness: 0.7,
+    roughness: 0.8,
     metalness: 0.1,
   });
   const platform = new THREE.Mesh(new THREE.BoxGeometry(sw, sh, sd), platformMat);
   platform.position.y = sh / 2;
+  platform.castShadow = true;
+  platform.receiveShadow = true;
   mainGroup.add(platform);
 
   const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(sw, sh, sd));
@@ -136,15 +167,15 @@ function buildPallet() {
 
   // ---- Метки поддона ----
   const labelStyle = {
-    color: '#0b1a33',
+    color: '#1e293b',
     fontFamily: 'Inter, sans-serif',
     fontSize: '13px',
-    fontWeight: '600',
-    background: 'rgba(255,255,255,0.85)',
-    padding: '2px 10px',
-    borderRadius: '12px',
-    border: '1px solid #cbd5e1',
-    boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+    fontWeight: '700',
+    background: 'rgba(255,255,255,0.9)',
+    padding: '4px 10px',
+    borderRadius: '8px',
+    border: '1px solid rgba(0,0,0,0.1)',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
     pointerEvents: 'none',
     userSelect: 'none',
   };
@@ -153,34 +184,34 @@ function buildPallet() {
   labelL.textContent = `${pW} мм`;
   Object.assign(labelL.style, labelStyle);
   const labelLObj = new CSS2DObject(labelL);
-  labelLObj.position.set(0, -5, sd / 2 + 15);
+  labelLObj.position.set(0, -5, sd / 2 + 25);
   labelGroup.add(labelLObj);
 
   const labelW = document.createElement('div');
   labelW.textContent = `${pD} мм`;
   Object.assign(labelW.style, labelStyle);
   const labelWObj = new CSS2DObject(labelW);
-  labelWObj.position.set(sw / 2 + 15, -5, 0);
+  labelWObj.position.set(sw / 2 + 25, -5, 0);
   labelGroup.add(labelWObj);
 
   const labelH = document.createElement('div');
   labelH.textContent = `${pH} мм`;
   Object.assign(labelH.style, labelStyle);
   const labelHObj = new CSS2DObject(labelH);
-  labelHObj.position.set(sw / 2 + 15, sh / 2, -sd / 2 - 15);
+  labelHObj.position.set(sw / 2 + 25, sh / 2, -sd / 2 - 25);
   labelGroup.add(labelHObj);
 
   // ---- Метка общей высоты паллеты ----
   const totalHeightLabelStyle = {
-    color: '#0b1a33',
+    color: '#ffffff',
     fontFamily: 'Inter, sans-serif',
     fontSize: '14px',
     fontWeight: '700',
-    background: 'rgba(255,255,255,0.9)',
-    padding: '4px 12px',
+    background: '#3b82f6',
+    padding: '6px 14px',
     borderRadius: '12px',
-    border: '2px solid #3b82f6',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+    border: '2px solid #2563eb',
+    boxShadow: '0 4px 12px rgba(59,130,246,0.3)',
     pointerEvents: 'none',
     userSelect: 'none',
   };
@@ -211,15 +242,15 @@ function buildPallet() {
   // ---- Статистика: общее количество коробок ----
   const totalBoxes = countX * countZ * layers;
   const statsLabelStyle = {
-    color: '#0b1a33',
+    color: '#ffffff',
     fontFamily: 'Inter, sans-serif',
     fontSize: '14px',
     fontWeight: '700',
-    background: 'rgba(255,255,255,0.9)',
-    padding: '4px 12px',
+    background: '#10b981',
+    padding: '6px 14px',
     borderRadius: '12px',
-    border: '2px solid #10b981',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+    border: '2px solid #059669',
+    boxShadow: '0 4px 12px rgba(16,185,129,0.3)',
     pointerEvents: 'none',
     userSelect: 'none',
   };
@@ -227,35 +258,29 @@ function buildPallet() {
   statsLabel.textContent = `Коробок на паллете: ${totalBoxes}`;
   Object.assign(statsLabel.style, statsLabelStyle);
   const statsLabelObj = new CSS2DObject(statsLabel);
-  statsLabelObj.position.set(0, totalH * scale + 50, 0);
+  statsLabelObj.position.set(0, totalH * scale + 60, 0);
   labelGroup.add(statsLabelObj);
 
-  // ---- Материалы для граней коробки ----
-  const colors = [
-    0xff6666, // +x (длина)
-    0xff6666, // -x
-    0x66ff66, // +y (высота)
-    0x66ff66, // -y
-    0x6666ff, // +z (ширина)
-    0x6666ff  // -z
-  ];
-  const materials = colors.map(c => new THREE.MeshPhongMaterial({
-    color: c,
-    transparent: true,
-    opacity: 0.2,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-    depthTest: true,
-  }));
+  // ---- Материалы коробок (картон) ----
+  const boxMat = new THREE.MeshStandardMaterial({
+    color: 0xc4a482, // Цвет крафт-картона
+    roughness: 0.85,
+    metalness: 0.05,
+  });
 
   const edgeMat = new THREE.LineBasicMaterial({
-    color: 0x1e293b,
+    color: 0x8b6c4b,
     depthTest: true,
   });
 
-  // ---- Создание слоёв с увеличенным отступом от поддона ----
-  const yOffset = 2; // увеличенный отступ для устранения мерцания (в масштабе)
+  // ---- Создание слоёв ----
+  const boxGeo = new THREE.BoxGeometry(boxL, boxH, boxW);
+  const edgeGeo = new THREE.EdgesGeometry(boxGeo);
+  
+  const yOffset = 1;
 
+  // Используем InstancedMesh для оптимизации (особенно если коробок много)
+  // Но для простоты оставим Mesh, так как слоев обычно немного
   for (let layer = 0; layer < layers; layer++) {
     const yPos = sh + boxH / 2 + layer * boxH + yOffset;
 
@@ -264,16 +289,14 @@ function buildPallet() {
         const x = startX + i * (boxL + gapL);
         const z = startZ + j * (boxW + gapW);
 
-        const geometry = new THREE.BoxGeometry(boxL, boxH, boxW);
-        const box = new THREE.Mesh(geometry, materials);
+        const box = new THREE.Mesh(boxGeo, boxMat);
         box.position.set(x, yPos, z);
-        box.renderOrder = 0;
+        box.castShadow = true;
+        box.receiveShadow = true;
         mainGroup.add(box);
 
-        const edgeGeo = new THREE.EdgesGeometry(geometry);
         const edge = new THREE.LineSegments(edgeGeo, edgeMat);
         edge.position.set(x, yPos, z);
-        edge.renderOrder = 1;
         mainGroup.add(edge);
       }
     }
@@ -297,10 +320,10 @@ function buildPallet() {
 }
 
 function animate() {
-  requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
-  labelRenderer.render(scene, camera);
+  animationFrameId = requestAnimationFrame(animate);
+  if (controls) controls.update();
+  if (renderer && scene && camera) renderer.render(scene, camera);
+  if (labelRenderer && scene && camera) labelRenderer.render(scene, camera);
 }
 
 function resetCamera() {
@@ -312,7 +335,7 @@ function resetCamera() {
   const maxDim = Math.max(size.x, size.y, size.z);
   const distance = maxDim * 1.8 + 200;
   camera.position.set(distance * 0.8, distance * 0.6, distance * 0.8);
-  controls.target.copy(center);
+  controls.target.set(center.x, center.y + 50, center.z);
   controls.update();
 }
 
@@ -334,8 +357,10 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  cancelAnimationFrame(animationFrameId);
+  if (resizeObserver) resizeObserver.disconnect();
   if (renderer) renderer.dispose();
-  if (labelRenderer) labelRenderer.domElement.remove();
+  if (labelRenderer && labelRenderer.domElement) labelRenderer.domElement.remove();
   if (container.value) container.value.innerHTML = '';
 });
 </script>
@@ -344,7 +369,7 @@ onBeforeUnmount(() => {
 .pallet-viewer-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 .pallet-container {
   width: 100%;
@@ -358,29 +383,20 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 4px 8px;
+  padding: 8px;
 }
-.ctrl-btn {
-  background: #f1f5f9;
-  border: none;
-  padding: 4px 12px;
-  border-radius: 20px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: #1e293b;
-  transition: 0.15s;
-}
-.ctrl-btn:hover {
-  background: #e2e8f0;
-}
-.controls label {
+.checkbox-label {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   font-weight: 500;
-  font-size: 0.9rem;
-  color: #334155;
+  font-size: 0.95rem;
+  color: var(--text-main);
+  cursor: pointer;
+}
+input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
   cursor: pointer;
 }
 </style>
