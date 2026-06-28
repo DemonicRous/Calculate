@@ -16,20 +16,20 @@ export const profileOptions = {
 const defaultState = {
   mode: 'calculator',
   // Основной режим
-  length: 400,
-  width: 300,
-  height: 200,
+  length: 300,
+  width: 200,
+  height: 100,
   materialPreset: 'Т-24',
   // Для нагрузки
-  weight: 15,
-  stackHeight: 6,
+  weight: 1.5,
+  stackHeight: 10,
   stackCoef1: 4,
   stackCoef2: 10,
   storageCondition: 'standard',
   // Для сравнения
-  length2: 470,
-  width2: 185,
-  height2: 240,
+  length2: 300,
+  width2: 200,
+  height2: 100,
   materialPreset2: 'Т-23',
   // Для паллетизации
   palletSize: '800x1200',

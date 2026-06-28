@@ -34,7 +34,6 @@ let labelGroup = new THREE.Group();
 let autoRotate = ref(true);
 let animationFrameId;
 
-// Внешние размеры коробки по высоте (для отрисовки)
 const extHeight = computed(() => props.boxHeight + 2 * props.thickness);
 
 function initScene() {
@@ -51,7 +50,6 @@ function initScene() {
   renderer.setSize(width, height);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   
-  // Включаем тени
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -74,7 +72,6 @@ function initScene() {
   controls.maxDistance = 4000;
   controls.minDistance = 200;
 
-  // Освещение
   const ambient = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambient);
   
@@ -96,12 +93,11 @@ function initScene() {
   fillLight.position.set(-400, 300, -500);
   scene.add(fillLight);
 
-  // Невидимая плоскость для приема теней
   const planeGeometry = new THREE.PlaneGeometry(5000, 5000);
   const planeMaterial = new THREE.ShadowMaterial({ opacity: 0.15 });
   const plane = new THREE.Mesh(planeGeometry, planeMaterial);
   plane.rotation.x = -Math.PI / 2;
-  plane.position.y = -2; // Чуть ниже поддона
+  plane.position.y = -2;
   plane.receiveShadow = true;
   scene.add(plane);
 
@@ -140,7 +136,6 @@ function buildPallet() {
   const sh = pH * scale;
   const boxH = bH * scale;
 
-  // ---- Поддон ----
   const platformMat = new THREE.MeshStandardMaterial({
     color: 0x8B5A2B,
     roughness: 0.8,
@@ -158,7 +153,6 @@ function buildPallet() {
   wireframe.position.y = sh / 2;
   mainGroup.add(wireframe);
 
-  // ---- Метки поддона ----
   const labelStyle = {
     color: '#1e293b',
     fontFamily: 'Inter, sans-serif',
@@ -194,7 +188,6 @@ function buildPallet() {
   labelHObj.position.set(sw / 2 + 25, sh / 2, -sd / 2 - 25);
   labelGroup.add(labelHObj);
 
-  // ---- Метка общей высоты паллеты ----
   const totalHeightLabelStyle = {
     color: '#ffffff',
     fontFamily: 'Inter, sans-serif',
@@ -215,7 +208,6 @@ function buildPallet() {
   totalHeightLabelObj.position.set(sw / 2 + 80, totalH * scale / 2, 0);
   labelGroup.add(totalHeightLabelObj);
 
-  // ---- Статистика: общее количество коробок ----
   const totalBoxes = props.layoutBoxes.length * layers;
   const statsLabelStyle = {
     color: '#ffffff',
@@ -237,33 +229,24 @@ function buildPallet() {
   statsLabelObj.position.set(0, totalH * scale + 60, 0);
   labelGroup.add(statsLabelObj);
 
-  // ---- Материалы коробок (картон) ----
   const boxMat = new THREE.MeshStandardMaterial({
-    color: 0xc4a482, // Цвет крафт-картона
+    color: 0xc4a482,
     roughness: 0.85,
     metalness: 0.05,
   });
-
   const edgeMat = new THREE.LineBasicMaterial({
     color: 0x8b6c4b,
     depthTest: true,
   });
 
-  // ---- Создание слоёв с перевязкой (зеркалирование четных ярусов) ----
   const yOffset = 1;
-
   for (let layer = 0; layer < layers; layer++) {
     const yPos = sh + boxH / 2 + layer * boxH + yOffset;
-
-    // В логистике слои перевязывают путем зеркального поворота на 180° по центру
     const shouldMirror = layer % 2 === 1;
 
     props.layoutBoxes.forEach((boxDef) => {
-      // Масштабируем размеры коробки и её координаты
       const boxL = boxDef.w * scale;
       const boxW = boxDef.d * scale;
-
-      // Зеркалируем координаты для четных ярусов (поворот на 180 относительно центра)
       const x = shouldMirror ? -boxDef.x * scale : boxDef.x * scale;
       const z = shouldMirror ? -boxDef.z * scale : boxDef.z * scale;
 
@@ -281,7 +264,6 @@ function buildPallet() {
     });
   }
 
-  // Центрирование сцены
   const box = new THREE.Box3().setFromObject(mainGroup);
   const center = new THREE.Vector3();
   box.getCenter(center);
@@ -318,8 +300,19 @@ function resetCamera() {
   controls.update();
 }
 
-watch(autoRotate, (val) => { controls.autoRotate = val; });
+// Захват скриншота для PDF
+const getSnapshot = () => {
+  if (!renderer || !scene || !camera) return null;
+  renderer.render(scene, camera);
+  if (labelRenderer) {
+    labelRenderer.render(scene, camera);
+  }
+  return renderer.domElement.toDataURL('image/png');
+};
 
+defineExpose({ getSnapshot });
+
+watch(autoRotate, (val) => { controls.autoRotate = val; });
 watch(
   () => [props.layoutBoxes, props.boxHeight, props.layers,
           props.palletWidth, props.palletDepth, props.palletHeight,

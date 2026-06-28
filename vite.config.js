@@ -4,5 +4,15 @@ import vue from '@vitejs/plugin-vue'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue()],
-  base: '/Calculate/'
+  base: '/Calculate/',
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          three: ['three'],
+          vendor: ['vue', '@heroicons/vue']
+        }
+      }
+    }
+  }
 })

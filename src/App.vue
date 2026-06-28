@@ -16,7 +16,6 @@
         </button>
       </header>
 
-      <!-- Вкладки -->
       <div class="tabs-container">
         <div class="tabs">
           <button
@@ -42,7 +41,6 @@
       </footer>
     </div>
 
-    <!-- Печатный отчет (Паспорт паллетизации) -->
     <div id="print-report" class="print-only">
       <div class="print-header">
         <h1>Паспорт расчета и паллетизации гофроупаковки</h1>
@@ -83,7 +81,8 @@
             </tr>
           </table>
           <div class="print-screenshot-container">
-            <ThreeViewer class="print-viewer" :length="state.length" :width="state.width" :height="state.height" />
+            <img v-if="boxSnapshot" :src="boxSnapshot" class="print-screenshot" alt="3D Короб" />
+            <ThreeViewer v-else ref="boxViewerRef" class="print-viewer" :length="state.length" :width="state.width" :height="state.height" />
           </div>
         </div>
       </div>
@@ -130,7 +129,10 @@
             </tr>
           </table>
           <div class="print-screenshot-container">
+            <img v-if="palletSnapshot" :src="palletSnapshot" class="print-screenshot" alt="3D Паллета" />
             <PalletizationViewer
+              v-else
+              ref="palletViewerRef"
               class="print-viewer"
               :layoutBoxes="currentLayout.boxes"
               :boxHeight="state.height"
@@ -153,7 +155,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, watch, provide } from 'vue';
+import { computed, ref, onMounted, watch, provide, nextTick } from 'vue';
 import { useBoxStrength } from './composables/useBoxStrength';
 
 import CalculatorTab from './components/tabs/CalculatorTab.vue';
@@ -194,8 +196,29 @@ const {
 
 const isDarkMode = ref(false);
 
-const exportToPDF = () => {
+const boxViewerRef = ref(null);
+const palletViewerRef = ref(null);
+const boxSnapshot = ref(null);
+const palletSnapshot = ref(null);
+
+const exportToPDF = async () => {
+  // 1. Создание снимков из Canvas перед печатью
+  if (boxViewerRef.value?.getSnapshot) {
+    boxSnapshot.value = boxViewerRef.value.getSnapshot();
+  }
+  if (palletViewerRef.value?.getSnapshot) {
+    palletSnapshot.value = palletViewerRef.value.getSnapshot();
+  }
+
+  // 2. Ждем рендеринга <img> в DOM
+  await nextTick();
+
+  // 3. Вызываем системную печать браузера
   window.print();
+
+  // 4. Очищаем снимки после завершения печати
+  boxSnapshot.value = null;
+  palletSnapshot.value = null;
 };
 
 provide('exportToPDF', exportToPDF);
@@ -238,6 +261,5 @@ const currentTabComponent = computed(() => {
 </script>
 
 <style>
-/* Мы удаляем scoped, чтобы глобальные переменные и стили карточек применялись к компонентам вкладок */
 @import './style.css';
 </style>

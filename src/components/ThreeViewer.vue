@@ -35,7 +35,6 @@ function initScene() {
   renderer.setSize(width, height);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   
-  // Включаем тени
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   
@@ -58,7 +57,6 @@ function initScene() {
   controls.maxDistance = 2000;
   controls.minDistance = 100;
 
-  // Освещение для реалистичности
   const ambient = new THREE.AmbientLight(0xffffff, 0.5);
   scene.add(ambient);
   
@@ -75,17 +73,16 @@ function initScene() {
   dirLight.shadow.camera.bottom = -500;
   dirLight.shadow.bias = -0.001;
   scene.add(dirLight);
-  
+
   const backLight = new THREE.DirectionalLight(0xffffff, 0.4);
   backLight.position.set(-300, 200, -300);
   scene.add(backLight);
 
-  // Невидимая плоскость для приема теней
   const planeGeometry = new THREE.PlaneGeometry(3000, 3000);
   const planeMaterial = new THREE.ShadowMaterial({ opacity: 0.15 });
   const plane = new THREE.Mesh(planeGeometry, planeMaterial);
   plane.rotation.x = -Math.PI / 2;
-  plane.position.y = - (props.height * 0.5 * 0.5) - 2; // Чуть ниже коробки
+  plane.position.y = - (props.height * 0.5 * 0.5) - 2; 
   plane.receiveShadow = true;
   scene.add(plane);
 
@@ -117,15 +114,14 @@ function createBox(length, width, height) {
   const h = height * scale;
 
   const geometry = new THREE.BoxGeometry(l, h, w);
-  
-  // Реалистичный материал картона
+
   const material = new THREE.MeshStandardMaterial({
-    color: 0xc4a482, // Цвет крафт-картона
+    color: 0xc4a482,
     roughness: 0.85,
     metalness: 0.05,
     side: THREE.DoubleSide,
   });
-  
+
   const cube = new THREE.Mesh(geometry, material);
   cube.castShadow = true;
   cube.receiveShadow = true;
@@ -181,6 +177,18 @@ function animate() {
   if (renderer && scene && camera) renderer.render(scene, camera);
   if (labelRenderer && scene && camera) labelRenderer.render(scene, camera);
 }
+
+// Захват скриншота для PDF
+const getSnapshot = () => {
+  if (!renderer || !scene || !camera) return null;
+  renderer.render(scene, camera);
+  if (labelRenderer) {
+    labelRenderer.render(scene, camera);
+  }
+  return renderer.domElement.toDataURL('image/png');
+};
+
+defineExpose({ getSnapshot });
 
 watch(() => [props.length, props.width, props.height], () => {
   if (scene) createBox(props.length, props.width, props.height);
