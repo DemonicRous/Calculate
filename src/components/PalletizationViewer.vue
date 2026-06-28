@@ -47,7 +47,7 @@ function initScene() {
 
   camera = new THREE.PerspectiveCamera(35, width / height, 0.1, 8000);
 
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
   renderer.setSize(width, height);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   

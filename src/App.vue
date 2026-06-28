@@ -41,17 +41,127 @@
         <p>© 2026 — Калькулятор BCT | Данные лабораторных испытаний</p>
       </footer>
     </div>
+
+    <!-- Печатный отчет (Паспорт паллетизации) -->
+    <div id="print-report" class="print-only">
+      <div class="print-header">
+        <h1>Паспорт расчета и паллетизации гофроупаковки</h1>
+        <p class="print-date">Дата формирования: {{ new Date().toLocaleString() }}</p>
+      </div>
+
+      <div class="print-section">
+        <h2>1. Характеристики короба и прочность</h2>
+        <div class="print-row">
+          <table class="print-table">
+            <tr>
+              <td>Длина / Ширина / Высота (внутренние):</td>
+              <td><strong>{{ state.length }} × {{ state.width }} × {{ state.height }} мм</strong></td>
+            </tr>
+            <tr>
+              <td>Марка картона / Профиль:</td>
+              <td><strong>{{ state.materialPreset }} (профиль {{ state.selectedProfile }}, {{ thickness_mm }} мм)</strong></td>
+            </tr>
+            <tr>
+              <td>ECT (сопротивление сжатию):</td>
+              <td><strong>{{ ect_knm }} кН/м</strong></td>
+            </tr>
+            <tr>
+              <td>BCT (прочность короба на сжатие):</td>
+              <td><strong>{{ bct_kg.toFixed(0) }} кгс</strong></td>
+            </tr>
+            <tr>
+              <td>Нагрузка штабеля (на нижний короб):</td>
+              <td><strong>{{ stackLoad.toFixed(0) }} кгс</strong></td>
+            </tr>
+            <tr>
+              <td>Фактический запас прочности:</td>
+              <td>
+                <strong :class="safetyMargin > 30 ? 'safe' : (safetyMargin > 10 ? 'warning' : 'danger')">
+                  {{ safetyMargin !== null ? safetyMargin.toFixed(0) + '%' : '—' }}
+                </strong>
+              </td>
+            </tr>
+          </table>
+          <div class="print-screenshot-container">
+            <ThreeViewer class="print-viewer" :length="state.length" :width="state.width" :height="state.height" />
+          </div>
+        </div>
+      </div>
+
+      <div class="print-section">
+        <h2>2. Параметры паллетизации и раскладки</h2>
+        <div class="print-row">
+          <table class="print-table">
+            <tr>
+              <td>Тип поддона (паллеты):</td>
+              <td><strong>{{ state.palletSize === '800x1200' ? 'Европаллета (800 × 1200)' : 'Финпаллета (1000 × 1200)' }}</strong></td>
+            </tr>
+            <tr>
+              <td>Схема укладки (раскладка):</td>
+              <td><strong>{{ currentLayout.name }}</strong></td>
+            </tr>
+            <tr>
+              <td>Коробок на один ярус:</td>
+              <td><strong>{{ currentLayout.count }} шт.</strong></td>
+            </tr>
+            <tr>
+              <td>Количество ярусов:</td>
+              <td><strong>{{ state.stackHeight }} ярусов</strong></td>
+            </tr>
+            <tr>
+              <td>Всего коробок на паллете:</td>
+              <td><strong>{{ currentLayout.count * Math.max(1, state.stackHeight) }} шт.</strong></td>
+            </tr>
+            <tr>
+              <td>Внешние габариты короба:</td>
+              <td><strong>{{ extLength.toFixed(1) }} × {{ extWidth.toFixed(1) }} × {{ extHeight.toFixed(1) }} мм</strong></td>
+            </tr>
+            <tr>
+              <td>Общая высота паллеты (с поддоном):</td>
+              <td><strong>{{ totalPalletHeight.toFixed(0) }} мм</strong></td>
+            </tr>
+            <tr>
+              <td>Общий вес брутто паллеты:</td>
+              <td><strong>{{ totalPalletWeight.toFixed(1) }} кг</strong></td>
+            </tr>
+            <tr>
+              <td>Эффективность площади укладки:</td>
+              <td><strong>{{ efficiencyArea.toFixed(1) }}%</strong></td>
+            </tr>
+          </table>
+          <div class="print-screenshot-container">
+            <PalletizationViewer
+              class="print-viewer"
+              :layoutBoxes="currentLayout.boxes"
+              :boxHeight="state.height"
+              :layers="state.stackHeight"
+              :palletWidth="palletWidth"
+              :palletDepth="palletDepth"
+              :palletHeight="150"
+              :thickness="profileThickness"
+              :totalHeight="totalPalletHeight"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="print-footer">
+        <p>Калькулятор прочности BCT &copy; 2026. Данные получены на основе лабораторных испытаний и ГОСТ.</p>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, onMounted, watch } from 'vue';
+import { computed, ref, onMounted, watch, provide } from 'vue';
 import { useBoxStrength } from './composables/useBoxStrength';
 
 import CalculatorTab from './components/tabs/CalculatorTab.vue';
 import CompareTab from './components/tabs/CompareTab.vue';
 import SelectionTab from './components/tabs/SelectionTab.vue';
 import PalletizationTab from './components/tabs/PalletizationTab.vue';
+import ThreeViewer from './components/ThreeViewer.vue';
+import PalletizationViewer from './components/PalletizationViewer.vue';
 
 import {
   CubeIcon,
@@ -63,9 +173,32 @@ import {
   MoonIcon
 } from '@heroicons/vue/24/outline';
 
-const { state } = useBoxStrength();
+const {
+  state,
+  ect_knm,
+  thickness_mm,
+  bct_kg,
+  stackLoad,
+  safetyMargin,
+  extLength,
+  extWidth,
+  extHeight,
+  totalPalletHeight,
+  currentLayout,
+  efficiencyArea,
+  totalPalletWeight,
+  palletWidth,
+  palletDepth,
+  profileThickness
+} = useBoxStrength();
 
 const isDarkMode = ref(false);
+
+const exportToPDF = () => {
+  window.print();
+};
+
+provide('exportToPDF', exportToPDF);
 
 onMounted(() => {
   const savedTheme = localStorage.getItem('bct_theme');

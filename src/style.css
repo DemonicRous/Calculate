@@ -510,3 +510,117 @@ footer {
     font-size: 1.8rem;
   }
 }
+
+/* ---- Print styles ---- */
+.print-only {
+  display: none;
+}
+
+@media print {
+  /* Hide all app contents */
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .app-container, header, .tabs-container, .tab-content, footer, .theme-toggle {
+    display: none !important;
+  }
+
+  /* Show print report */
+  .print-only {
+    display: block !important;
+  }
+
+  #print-report {
+    max-width: 800px;
+    margin: 0 auto;
+    font-family: 'Inter', system-ui, sans-serif;
+    color: #000000;
+  }
+
+  .print-header {
+    text-align: center;
+    border-bottom: 2px solid #334155;
+    padding-bottom: 12px;
+    margin-bottom: 24px;
+  }
+
+  .print-header h1 {
+    font-size: 1.8rem;
+    margin: 0;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  .print-date {
+    font-size: 0.9rem;
+    color: #475569;
+    margin: 6px 0 0 0;
+  }
+
+  .print-section {
+    margin-bottom: 28px;
+    page-break-inside: avoid;
+  }
+
+  .print-section h2 {
+    font-size: 1.2rem;
+    border-bottom: 1px solid #cbd5e1;
+    padding-bottom: 6px;
+    margin-bottom: 16px;
+    color: #1e293b;
+  }
+
+  .print-row {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+
+  .print-table {
+    flex: 1;
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  .print-table td {
+    padding: 8px 12px;
+    border: 1px solid #cbd5e1;
+    font-size: 0.9rem;
+  }
+
+  .print-table tr:nth-child(even) {
+    background-color: #f8fafc;
+  }
+
+  .print-screenshot-container {
+    width: 250px;
+    height: 200px;
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-color: #f8fafc;
+  }
+
+  .print-screenshot {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .print-footer {
+    text-align: center;
+    margin-top: 40px;
+    border-top: 1px solid #cbd5e1;
+    padding-top: 12px;
+    font-size: 0.8rem;
+    color: #64748b;
+  }
+}
+

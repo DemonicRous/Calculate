@@ -51,6 +51,10 @@
         <p><strong>Коробок на паллете:</strong> <span class="highlight-val">{{ currentLayout.count * Math.max(1, state.stackHeight) }} шт.</span></p>
         <p><strong>Общий вес (брутто):</strong> <span class="highlight-val">{{ totalPalletWeight.toFixed(1) }} кг</span></p>
       </div>
+
+      <button class="glass-btn print-btn" @click="exportToPDF" style="width: 100%; margin-top: 16px;">
+        <DocumentArrowDownIcon class="icon" /> Экспорт паспорта (PDF)
+      </button>
     </div>
 
     <div class="card viewer-card glass-card">
@@ -71,12 +75,14 @@
 </template>
 
 <script setup>
+import { inject } from 'vue';
 import { useBoxStrength, profileOptions } from '../../composables/useBoxStrength';
 import PalletizationViewer from '../PalletizationViewer.vue';
 
 import {
   ArchiveBoxIcon,
-  CubeIcon
+  CubeIcon,
+  DocumentArrowDownIcon
 } from '@heroicons/vue/24/outline';
 
 const {
@@ -93,6 +99,8 @@ const {
   efficiencyArea,
   totalPalletWeight
 } = useBoxStrength();
+
+const exportToPDF = inject('exportToPDF');
 </script>
 
 <style scoped>
