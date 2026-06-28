@@ -8,9 +8,14 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          three: ['three'],
-          vendor: ['vue', '@heroicons/vue']
+        // Теперь manualChunks — это функция, которая проверяет путь к модулю
+        manualChunks(id) {
+          if (id.includes('node_modules/three')) {
+            return 'three'; // Выносим Three.js в отдельный файл
+          }
+          if (id.includes('node_modules/vue') || id.includes('node_modules/@heroicons')) {
+            return 'vendor'; // Vue и иконки в другой
+          }
         }
       }
     }
