@@ -394,18 +394,18 @@ const totalPalletWeight = computed(() => {
 });
 
 function reset() {
-  state.length = 400;
-  state.width = 300;
-  state.height = 200;
+  state.length = 300;
+  state.width = 200;
+  state.height = 100;
   state.materialPreset = 'Т-24';
-  state.weight = 15;
-  state.stackHeight = 6;
+  state.weight = 1.5;
+  state.stackHeight = 10;
   state.stackCoef1 = 4;
   state.stackCoef2 = 10;
   state.storageCondition = 'standard';
-  state.length2 = 470;
-  state.width2 = 185;
-  state.height2 = 240;
+  state.length2 = 300;
+  state.width2 = 200;
+  state.height2 = 100;
   state.materialPreset2 = 'Т-23';
   state.palletSize = '800x1200';
   state.selectedProfile = 'B';
